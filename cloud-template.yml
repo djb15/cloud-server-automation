@@ -32,10 +32,11 @@ Resources:
     Properties:
       EnableDnsSupport: true
       EnableDnsHostnames: true
-      CidrBlock: !FindInMap ['SubnetConfig', 'VPC', 'CIDR']
+      CidrBlock: !FindInMap [SubnetConfig, VPC, CIDR]
       Tags:
-      - Key: Name
-      - Value: !FindInMap ['SubnetConfig', 'VPC', 'Name']
+      - 
+        Key: Name
+        Value: !FindInMap [SubnetConfig, VPC, Name]
   # Public subnet, where Jenkins container can be accessed from the internet
   Subnet:
     Type: AWS::EC2::Subnet
@@ -46,11 +47,12 @@ Resources:
          - 0
          - Fn::GetAZs: {Ref: 'AWS::Region'}
       VpcId: !Ref 'VPC'
-      CidrBlock: !FindInMap ['SubnetConfig', 'Subnet', 'CIDR']
+      CidrBlock: !FindInMap [SubnetConfig, Subnet, CIDR]
       MapPublicIpOnLaunch: true
       Tags:
-      - Key: Name
-      - Value: !FindInMap ['SubnetConfig', 'Subnet', 'Name']
+      - 
+        Key: Name
+        Value: !FindInMap [SubnetConfig, Subnet, Name]
 
 
   # Setup networking resources for the public subnets. Containers
@@ -60,7 +62,9 @@ Resources:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
-      - Name: !Ref 'InternetGatewayName'
+      - 
+        Key: Name
+        Value: !Ref 'InternetGatewayName'
   GatewayAttachement:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
@@ -71,7 +75,9 @@ Resources:
     Properties:
       VpcId: !Ref 'VPC'
       Tags:
-      - Name: !Ref 'RouteTableName'
+      - 
+        Key: Name
+        Value: !Ref 'RouteTableName'
   PublicRoute:
     Type: AWS::EC2::Route
     DependsOn: GatewayAttachement
@@ -115,6 +121,59 @@ Resources:
       ToPort: '443'
       CidrIp: 0.0.0.0/0
 
+  StartJenkins:
+    Type: AWS::Lambda::Function
+    Properties: 
+      Code: 
+        S3Bucket: jenkins-startup
+        S3Key: jenkins-startup.zip
+      Description: Starts jenkins server on GitHub trigger
+      FunctionName: jenkins-startup
+      Handler: jenkins-startup.lambda_function
+      MemorySize: 128
+      Runtime: python3.7
+      Timeout: 10
+      Role: !GetAtt LambdaRole.Arn
+
+  StopJenkins:
+    Type: AWS::Lambda::Function
+    Properties: 
+      Code: 
+        S3Bucket: jenkins-startup
+        S3Key: jenkins-startup.zip
+      Description: Stops jenkins
+      FunctionName: jenkins-shutdown
+      Handler: jenkins-startup.stop_jenkins
+      MemorySize: 128
+      Runtime: python3.7
+      Timeout: 10
+      Role: !GetAtt LambdaRole.Arn
+  
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+            - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+              - lambda.amazonaws.com
+        Version: 2012-10-17
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSLambdaExecute
+      Path: /
+
+  # StopJenkinsTimer:
+  #   Type: AWS::Events::Rule
+  #   Properties: 
+  #     Description: Stop Jenkins after 1 hour
+  #     Name: jenkins-stop-timer
+  #     RoleArn: String
+  #     State: ENABLED
+  #     Targets: 
+  #       - Target
   
 #   ECSCluster:
 #     Type: AWS::ECS::Cluster
