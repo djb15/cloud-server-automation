@@ -41,11 +41,7 @@ Resources:
   Subnet:
     Type: AWS::EC2::Subnet
     Properties:
-      AvailabilityZone:
-        # Get the first availability zone in the deployed AWS region
-         Fn::Select:
-         - 0
-         - Fn::GetAZs: {Ref: 'AWS::Region'}
+      AvailabilityZone: eu-west-1a
       VpcId: !Ref 'VPC'
       CidrBlock: !FindInMap [SubnetConfig, Subnet, CIDR]
       MapPublicIpOnLaunch: true
@@ -161,19 +157,121 @@ Resources:
               Service:
               - lambda.amazonaws.com
         Version: 2012-10-17
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AWSLambdaExecute
       Path: /
+      Policies:
+      - PolicyName: run-jenkins
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action: ['ecs:ListTasks', 'ecs:RunTask']
+            Resource: '*'
 
-  # StopJenkinsTimer:
-  #   Type: AWS::Events::Rule
-  #   Properties: 
-  #     Description: Stop Jenkins after 1 hour
-  #     Name: jenkins-stop-timer
-  #     RoleArn: String
-  #     State: ENABLED
-  #     Targets: 
-  #       - Target
+  JenkinsCluster:
+    Type: AWS::ECS::Cluster
+    Properties : 
+      ClusterName : ci-cd-cluster
+
+  JenkinsTask:
+    Type: AWS::ECS::TaskDefinition
+    Properties: 
+      ContainerDefinitions: 
+        - 
+          Name: jenkins
+          Image: jenkinsci/blueocean
+          Cpu: 800
+          Memory: 800
+          MountPoints:
+          - SourceVolume: docker-volume
+            ContainerPath: /var/www/jenkins
+          PortMappings:
+          - ContainerPort: 80
+      Family: jenkins-task
+      NetworkMode: host
+      RequiresCompatibilities: 
+      - EC2
+      Volumes: 
+      - 
+        Name: docker-volume
+
+  JenkinsInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone: eu-west-1a
+      IamInstanceProfile: !Ref EC2Role
+      ImageId: ami-0c5abd45f676aab4f
+      SubnetId: !Ref Subnet
+      InstanceType: t2.micro
+      SecurityGroupIds:
+        - !Ref SecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          echo ECS_CLUSTER=ci-cd-cluster >> /etc/ecs/ecs.config
+      Volumes:
+        - Device: /dev/sda2
+          VolumeId: !Ref JenkinsVolume
+    DependsOn: GatewayAttachement
+
+  JenkinsVolume:
+    Type: AWS::EC2::Volume
+    Properties: 
+      AvailabilityZone: eu-west-1a
+      Size: 10
+
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+            - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+              - ec2.amazonaws.com
+        Version: 2012-10-17
+      Path: /
+      Policies:
+      - PolicyName: connect-to-ecs
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action: [
+              "ecs:DeregisterContainerInstance",
+              "ecs:DiscoverPollEndpoint",
+              "ecs:Poll",
+              "ecs:RegisterContainerInstance",
+              "ecs:StartTelemetrySession",
+              "ecs:Submit*",
+              "ecr:GetAuthorizationToken",
+              "ecr:BatchCheckLayerAvailability",
+              "ecr:GetDownloadUrlForLayer",
+              "ecr:BatchGetImage",
+              "logs:CreateLogStream",
+              "logs:PutLogEvents"
+            ]
+            Resource: '*'
+
+  # EC2Role:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     AssumeRolePolicyDocument:
+  #       Statement:
+  #       - Effect: Allow
+  #         Principal:
+  #           Service: [ec2.amazonaws.com]
+  #         Action: ['sts:AssumeRole']
+  #     Path: /
+  #     Policies:
+  #     - PolicyName: ecs-service
+  #       PolicyDocument:
+  #         Statement:
+  #         - Effect: Allow
+  #           Action: ['ecs:CreateCluster', 'ecs:DeregisterContainerInstance', 'ecs:DiscoverPollEndpoint',
+  #             'ecs:Poll', 'ecs:RegisterContainerInstance', 'ecs:StartTelemetrySession',
+  #             'ecs:Submit*', 'logs:CreateLogStream', 'logs:PutLogEvents']
+  #           Resource: '*'
+
   
 #   ECSCluster:
 #     Type: AWS::ECS::Cluster

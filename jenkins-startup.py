@@ -23,7 +23,7 @@ def create_timer():
     )
 
 def lambda_function(event, context):
-    validate_request(event)
+    #validate_request(event)
 
     client = boto3.client('ecs')
     running_tasks = client.list_tasks(
@@ -32,23 +32,21 @@ def lambda_function(event, context):
                         desiredStatus='RUNNING'
                     )
 
-    if len(running_tasks['taskArns'] == 0):
+    if not running_tasks['taskArns']:
+        ec2_client = boto3.client('ec2')
+
+        ec2_client.run_instances(
+            LaunchTemplate={
+                'LaunchTemplateName': 'jenkins-ec2-instance'
+            }
+        )
+
         client.run_task(
             cluster='ci-cd-cluster',
-            taskDefinition='run-jenkins',
+            taskDefinition='jenkins-task',
             count=1,
-            launchType='FARGATE',
-            networkConfiguration={
-                'awsvpcConfiguration': {
-                    'subnets': [
-                        'string',
-                    ],
-                    'securityGroups': [
-                        'string',
-                    ],
-                    'assignPublicIp': 'ENABLED'|'DISABLED'
-                }
-            }
+            launchType='EC2',
+            startedBy='start-jenkins-lambda'
         )
 
     # Update cloudwatch event schedule to stop ecs task
@@ -65,6 +63,12 @@ def stop_jenkins(event, context):
 
     if len(jenkins_instance['taskArns']) != 0:
         jenkins_arn = jenkins_instance['taskArns'][0]
+
+        ec2_client = boto3.client('ec2')
+        ec2_client.stop_instances(
+            
+        )
+
         client.stop_task(
             cluster='ci-cd-cluster',
             task=jenkins_arn

@@ -8,3 +8,4 @@ zip jenkins-startup.zip jenkins-startup.py requirements.txt
 aws s3 cp jenkins-startup.zip s3://jenkins-startup/jenkins-startup.zip
 # Create secret in SSM
 #aws ssm put-parameter --name "/github/webhook-secret" --type "SecureString" --value "$1"
+# aws cloudformation deploy --template-file cloud-template.yml --stack-name jenkins-stack --capabilities CAPABILITY_IAM
