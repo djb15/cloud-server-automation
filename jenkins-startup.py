@@ -2,6 +2,7 @@ import boto3
 import hmac
 import logging
 import json
+import time
 from  datetime import datetime, timedelta
 
 def validate_request(event):
@@ -15,12 +16,30 @@ def validate_request(event):
 
 def create_timer():
     stop_time = datetime.now() + timedelta(hours=1)
-    stop_expression = stop_time.strftime('cron(%M %H %d %m ? %Y')
+    stop_expression = stop_time.strftime('cron(%M %H %d %m ? %Y)')
     client = boto3.client('events')
-    client.put_role(
+    client.put_rule(
         Name='stop-jenkins',
         ScheduleExpression=stop_expression
     )
+
+def get_jenkins_instance(ec2_client, status):
+    instances = ec2_client.describe_instances(
+                    Filters=[
+                        {
+                            'Name': 'instance-state-name',
+                            'Values': [status]
+                        }
+                    ]
+                )
+
+    name_tag = {'Key': 'Name', 'Value': 'jenkins-instance'}
+    instance_id = None
+    for instance in instances['Reservations'][0]['Instances']:
+        if name_tag in instance['Tags']:
+            instance_id = instance['InstanceId']
+
+    return instance_id
 
 def lambda_function(event, context):
     #validate_request(event)
@@ -34,13 +53,16 @@ def lambda_function(event, context):
 
     if not running_tasks['taskArns']:
         ec2_client = boto3.client('ec2')
+        instance_id = get_jenkins_instance(ec2_client, 'stopped')
 
-        ec2_client.run_instances(
-            LaunchTemplate={
-                'LaunchTemplateName': 'jenkins-ec2-instance'
-            }
+        ec2_client.start_instances(
+            InstanceIds=[instance_id]
         )
 
+        # Wait for ec2 instance to start before running task
+        time.sleep(90)
+
+        client = boto3.client('ecs')
         client.run_task(
             cluster='ci-cd-cluster',
             taskDefinition='jenkins-task',
@@ -55,23 +77,18 @@ def lambda_function(event, context):
 
 def stop_jenkins(event, context):
     client = boto3.client('ecs')
-    jenkins_instance = client.list_tasks(
+    running_tasks = client.list_tasks(
         cluster='ci-cd-cluster',
         startedBy='start-jenkins-lambda',
         desiredStatus='RUNNING'
     )
 
-    if len(jenkins_instance['taskArns']) != 0:
-        jenkins_arn = jenkins_instance['taskArns'][0]
-
+    if running_tasks['taskArns']:
         ec2_client = boto3.client('ec2')
-        ec2_client.stop_instances(
-            
-        )
+        instance_id = get_jenkins_instance(ec2_client, 'running')
 
-        client.stop_task(
-            cluster='ci-cd-cluster',
-            task=jenkins_arn
+        ec2_client.stop_instances(
+            InstanceIds=[instance_id]
         )
 
 

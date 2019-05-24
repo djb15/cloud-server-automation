@@ -108,6 +108,14 @@ Resources:
       FromPort: '80'
       ToPort: '80'
       CidrIp: 0.0.0.0/0
+  # AllowSSHInbound:
+  #   Type: AWS::EC2::SecurityGroupIngress
+  #   Properties:
+  #     GroupId: !Ref 'SecurityGroup'
+  #     IpProtocol: tcp
+  #     FromPort: '22'
+  #     ToPort: '22'
+  #     CidrIp: 0.0.0.0/0
   AllowHTTPSInbound:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
@@ -128,7 +136,7 @@ Resources:
       Handler: jenkins-startup.lambda_function
       MemorySize: 128
       Runtime: python3.7
-      Timeout: 10
+      Timeout: 120
       Role: !GetAtt LambdaRole.Arn
 
   StopJenkins:
@@ -163,8 +171,18 @@ Resources:
         PolicyDocument:
           Statement:
           - Effect: Allow
-            Action: ['ecs:ListTasks', 'ecs:RunTask']
+            Action: ['ecs:ListTasks', 'ecs:RunTask', 'events:PutRule', 'ec2:DescribeInstances', 'ec2:StopInstances', 'ec2:StartInstances']
             Resource: '*'
+
+  StopLambdaEvent:
+    Type: AWS::Events::Rule
+    Properties: 
+      Name: stop-jenkins
+      ScheduleExpression: rate(1 hour)
+      State: ENABLED
+      Targets: 
+        - Arn: !GetAtt StopJenkins.Arn
+          Id: id-jenkins-stop
 
   JenkinsCluster:
     Type: AWS::ECS::Cluster
@@ -182,25 +200,31 @@ Resources:
           Memory: 800
           MountPoints:
           - SourceVolume: docker-volume
-            ContainerPath: /var/www/jenkins
+            ContainerPath: /var/jenkins_home
           PortMappings:
-          - ContainerPort: 80
+          - ContainerPort: 8080
+            HostPort: 80
       Family: jenkins-task
-      NetworkMode: host
+      NetworkMode: bridge
       RequiresCompatibilities: 
       - EC2
       Volumes: 
       - 
         Name: docker-volume
+        DockerVolumeConfiguration:
+          Autoprovision: true
+          Scope: shared
+
 
   JenkinsInstance:
     Type: AWS::EC2::Instance
     Properties:
       AvailabilityZone: eu-west-1a
-      IamInstanceProfile: !Ref EC2Role
+      IamInstanceProfile: !Ref EC2InstanceProfile
       ImageId: ami-0c5abd45f676aab4f
       SubnetId: !Ref Subnet
       InstanceType: t2.micro
+      #KeyName: test
       SecurityGroupIds:
         - !Ref SecurityGroup
       UserData:
@@ -210,6 +234,9 @@ Resources:
       Volumes:
         - Device: /dev/sda2
           VolumeId: !Ref JenkinsVolume
+      Tags:
+        - Key: Name
+          Value: jenkins-instance
     DependsOn: GatewayAttachement
 
   JenkinsVolume:
@@ -217,6 +244,13 @@ Resources:
     Properties: 
       AvailabilityZone: eu-west-1a
       Size: 10
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: jenkins-ec2-instance
+      Roles:
+        - !Ref EC2Role
 
   EC2Role:
     Type: AWS::IAM::Role
