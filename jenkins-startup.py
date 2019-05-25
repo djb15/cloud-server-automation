@@ -15,7 +15,7 @@ def validate_request(event):
         raise Exception('Invalid signature')
 
 def create_timer():
-    stop_time = datetime.now() + timedelta(hours=1)
+    stop_time = datetime.now() + timedelta(hours=2)
     stop_expression = stop_time.strftime('cron(%M %H %d %m ? %Y)')
     client = boto3.client('events')
     client.put_rule(
@@ -51,8 +51,10 @@ def lambda_function(event, context):
                         desiredStatus='RUNNING'
                     )
 
+    ec2_client = boto3.client('ec2')
+    instance_id = None
+
     if not running_tasks['taskArns']:
-        ec2_client = boto3.client('ec2')
         instance_id = get_jenkins_instance(ec2_client, 'stopped')
 
         ec2_client.start_instances(
@@ -71,8 +73,13 @@ def lambda_function(event, context):
             startedBy='start-jenkins-lambda'
         )
 
+    else:
+        instance_id = get_jenkins_instance(ec2_client, 'running')
+
     # Update cloudwatch event schedule to stop ecs task
     create_timer()
+
+    return instance_id
 
 
 def stop_jenkins(event, context):

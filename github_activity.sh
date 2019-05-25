@@ -1,0 +1,1 @@
+aws lambda invoke --function-name jenkins-startup activity.log
