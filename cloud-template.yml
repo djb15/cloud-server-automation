@@ -10,14 +10,6 @@ Parameters:
     Type: String
     Default: jenkins-security
 Mappings:
-  # Hard coded values for subnet masks. These masks define
-  # the range of internal IP addresses that can be assigned.
-  # The VPC CIDR defines the IP's from 10.0.0.0 to 10.0.255.255
-  # The subnet covers the range:
-  #
-  # 10.0.0.0 - 10.0.0.255
-  #
-  # These ranges can be customised to fit around existing VPCs
   SubnetConfig:
     VPC:
       CIDR: '10.0.0.0/16'
@@ -26,7 +18,6 @@ Mappings:
       CIDR: '10.0.0.0/24'
       Name: 'jenkins-subnet'
 Resources:
-  # VPC in which Jenkins will live.
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -37,7 +28,7 @@ Resources:
       - 
         Key: Name
         Value: !FindInMap [SubnetConfig, VPC, Name]
-  # Public subnet, where Jenkins container can be accessed from the internet
+
   Subnet:
     Type: AWS::EC2::Subnet
     Properties:
@@ -50,10 +41,6 @@ Resources:
         Key: Name
         Value: !FindInMap [SubnetConfig, Subnet, Name]
 
-
-  # Setup networking resources for the public subnets. Containers
-  # in the public subnets have public IP addresses and the routing table
-  # sends network traffic via the internet gateway.
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -61,11 +48,13 @@ Resources:
       - 
         Key: Name
         Value: !Ref 'InternetGatewayName'
+
   GatewayAttachement:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref 'VPC'
       InternetGatewayId: !Ref 'InternetGateway'
+
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -74,6 +63,7 @@ Resources:
       - 
         Key: Name
         Value: !Ref 'RouteTableName'
+
   PublicRoute:
     Type: AWS::EC2::Route
     DependsOn: GatewayAttachement
@@ -81,25 +71,20 @@ Resources:
       RouteTableId: !Ref 'PublicRouteTable'
       DestinationCidrBlock: '0.0.0.0/0'
       GatewayId: !Ref 'InternetGateway'
+
   SubnetRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref Subnet
       RouteTableId: !Ref PublicRouteTable
-  # A security group for the containers we will run in Fargate.
-  # Two rules, allowing network traffic from a public facing load
-  # balancer and from other members of the security group.
-  #
-  # Remove any of the following ingress rules that are not needed.
-  # If you want to make direct requests to a container using its
-  # public IP address you'll need to add a security group rule
-  # to allow traffic from all IP addresses.
+
   SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Ref 'SecurityGroupName'
       GroupDescription: Access to the Jenkins container
       VpcId: !Ref 'VPC'
+
   AllowHTTPInbound:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
@@ -108,14 +93,7 @@ Resources:
       FromPort: '80'
       ToPort: '80'
       CidrIp: 0.0.0.0/0
-  # AllowSSHInbound:
-  #   Type: AWS::EC2::SecurityGroupIngress
-  #   Properties:
-  #     GroupId: !Ref 'SecurityGroup'
-  #     IpProtocol: tcp
-  #     FromPort: '22'
-  #     ToPort: '22'
-  #     CidrIp: 0.0.0.0/0
+
   AllowHTTPSInbound:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
@@ -292,302 +270,3 @@ Resources:
               "logs:PutLogEvents"
             ]
             Resource: '*'
-
-  # EC2Role:
-  #   Type: AWS::IAM::Role
-  #   Properties:
-  #     AssumeRolePolicyDocument:
-  #       Statement:
-  #       - Effect: Allow
-  #         Principal:
-  #           Service: [ec2.amazonaws.com]
-  #         Action: ['sts:AssumeRole']
-  #     Path: /
-  #     Policies:
-  #     - PolicyName: ecs-service
-  #       PolicyDocument:
-  #         Statement:
-  #         - Effect: Allow
-  #           Action: ['ecs:CreateCluster', 'ecs:DeregisterContainerInstance', 'ecs:DiscoverPollEndpoint',
-  #             'ecs:Poll', 'ecs:RegisterContainerInstance', 'ecs:StartTelemetrySession',
-  #             'ecs:Submit*', 'logs:CreateLogStream', 'logs:PutLogEvents']
-  #           Resource: '*'
-
-  
-#   ECSCluster:
-#     Type: AWS::ECS::Cluster
-#   EcsSecurityGroup:
-#     Type: AWS::EC2::SecurityGroup
-#     Properties:
-#       GroupDescription: ECS Security Group
-#       VpcId: !Ref 'VpcId'
-#   EcsSecurityGroupHTTPinbound:
-#     Type: AWS::EC2::SecurityGroupIngress
-#     Properties:
-#       GroupId: !Ref 'EcsSecurityGroup'
-#       IpProtocol: tcp
-#       FromPort: '80'
-#       ToPort: '80'
-#       CidrIp: 0.0.0.0/0
-#   EcsSecurityGroupSSHinbound:
-#     Type: AWS::EC2::SecurityGroupIngress
-#     Properties:
-#       GroupId: !Ref 'EcsSecurityGroup'
-#       IpProtocol: tcp
-#       FromPort: '22'
-#       ToPort: '22'
-#       CidrIp: 0.0.0.0/0
-#   EcsSecurityGroupALBports:
-#     Type: AWS::EC2::SecurityGroupIngress
-#     Properties:
-#       GroupId: !Ref 'EcsSecurityGroup'
-#       IpProtocol: tcp
-#       FromPort: '31000'
-#       ToPort: '61000'
-#       SourceSecurityGroupId: !Ref 'EcsSecurityGroup'
-#   CloudwatchLogsGroup:
-#     Type: AWS::Logs::LogGroup
-#     Properties:
-#       LogGroupName: !Join ['-', [ECSLogGroup, !Ref 'AWS::StackName']]
-#       RetentionInDays: 14
-#   taskdefinition:
-#     Type: AWS::ECS::TaskDefinition
-#     Properties:
-#       Family: !Join ['', [!Ref 'AWS::StackName', -ecs-demo-app]]
-#       ContainerDefinitions:
-#       - Name: simple-app
-#         Cpu: '10'
-#         Essential: 'true'
-#         Image: httpd:2.4
-#         Memory: '300'
-#         LogConfiguration:
-#           LogDriver: awslogs
-#           Options:
-#             awslogs-group: !Ref 'CloudwatchLogsGroup'
-#             awslogs-region: !Ref 'AWS::Region'
-#             awslogs-stream-prefix: ecs-demo-app
-#         MountPoints:
-#         - ContainerPath: /usr/local/apache2/htdocs
-#           SourceVolume: my-vol
-#         PortMappings:
-#         - ContainerPort: 80
-#       - Name: busybox
-#         Cpu: 10
-#         Command: ['/bin/sh -c "while true; do echo ''<html> <head> <title>Amazon ECS
-#             Sample App</title> <style>body {margin-top: 40px; background-color: #333;}
-#             </style> </head><body> <div style=color:white;text-align:center> <h1>Amazon
-#             ECS Sample App</h1> <h2>Congratulations!</h2> <p>Your application is now
-#             running on a container in Amazon ECS.</p>'' > top; /bin/date > date ;
-#             echo ''</div></body></html>'' > bottom; cat top date bottom > /usr/local/apache2/htdocs/index.html
-#             ; sleep 1; done"']
-#         EntryPoint: [sh, -c]
-#         Essential: false
-#         Image: busybox
-#         Memory: 200
-#         LogConfiguration:
-#           LogDriver: awslogs
-#           Options:
-#             awslogs-group: !Ref 'CloudwatchLogsGroup'
-#             awslogs-region: !Ref 'AWS::Region'
-#             awslogs-stream-prefix: ecs-demo-app
-#         VolumesFrom:
-#         - SourceContainer: simple-app
-#       Volumes:
-#       - Name: my-vol
-#   ECSALB:
-#     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-#     Properties:
-#       Name: ECSALB
-#       Scheme: internet-facing
-#       LoadBalancerAttributes:
-#       - Key: idle_timeout.timeout_seconds
-#         Value: '30'
-#       Subnets: !Ref 'SubnetId'
-#       SecurityGroups: [!Ref 'EcsSecurityGroup']
-#   ALBListener:
-#     Type: AWS::ElasticLoadBalancingV2::Listener
-#     DependsOn: ECSServiceRole
-#     Properties:
-#       DefaultActions:
-#       - Type: forward
-#         TargetGroupArn: !Ref 'ECSTG'
-#       LoadBalancerArn: !Ref 'ECSALB'
-#       Port: '80'
-#       Protocol: HTTP
-#   ECSALBListenerRule:
-#     Type: AWS::ElasticLoadBalancingV2::ListenerRule
-#     DependsOn: ALBListener
-#     Properties:
-#       Actions:
-#       - Type: forward
-#         TargetGroupArn: !Ref 'ECSTG'
-#       Conditions:
-#       - Field: path-pattern
-#         Values: [/]
-#       ListenerArn: !Ref 'ALBListener'
-#       Priority: 1
-#   ECSTG:
-#     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-#     DependsOn: ECSALB
-#     Properties:
-#       HealthCheckIntervalSeconds: 10
-#       HealthCheckPath: /
-#       HealthCheckProtocol: HTTP
-#       HealthCheckTimeoutSeconds: 5
-#       HealthyThresholdCount: 2
-#       Name: ECSTG
-#       Port: 80
-#       Protocol: HTTP
-#       UnhealthyThresholdCount: 2
-#       VpcId: !Ref 'VpcId'
-#   ECSAutoScalingGroup:
-#     Type: AWS::AutoScaling::AutoScalingGroup
-#     Properties:
-#       VPCZoneIdentifier: !Ref 'SubnetId'
-#       LaunchConfigurationName: !Ref 'ContainerInstances'
-#       MinSize: '1'
-#       MaxSize: !Ref 'MaxSize'
-#       DesiredCapacity: !Ref 'DesiredCapacity'
-#     CreationPolicy:
-#       ResourceSignal:
-#         Timeout: PT15M
-#     UpdatePolicy:
-#       AutoScalingReplacingUpdate:
-#         WillReplace: 'true'
-#   ContainerInstances:
-#     Type: AWS::AutoScaling::LaunchConfiguration
-#     Properties:
-#       ImageId: !FindInMap [AWSRegionToAMI, !Ref 'AWS::Region', AMIID]
-#       SecurityGroups: [!Ref 'EcsSecurityGroup']
-#       InstanceType: !Ref 'InstanceType'
-#       IamInstanceProfile: !Ref 'EC2InstanceProfile'
-#       KeyName: !Ref 'KeyName'
-#       UserData:
-#         Fn::Base64: !Sub |
-#           #!/bin/bash -xe
-#           echo ECS_CLUSTER=${ECSCluster} >> /etc/ecs/ecs.config
-#           yum install -y aws-cfn-bootstrap
-#           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ECSAutoScalingGroup --region ${AWS::Region}
-#   service:
-#     Type: AWS::ECS::Service
-#     DependsOn: ALBListener
-#     Properties:
-#       Cluster: !Ref 'ECSCluster'
-#       DesiredCount: '1'
-#       LoadBalancers:
-#       - ContainerName: simple-app
-#         ContainerPort: '80'
-#         TargetGroupArn: !Ref 'ECSTG'
-#       Role: !Ref 'ECSServiceRole'
-#       TaskDefinition: !Ref 'taskdefinition'
-#   ECSServiceRole:
-#     Type: AWS::IAM::Role
-#     Properties:
-#       AssumeRolePolicyDocument:
-#         Statement:
-#         - Effect: Allow
-#           Principal:
-#             Service: [ecs.amazonaws.com]
-#           Action: ['sts:AssumeRole']
-#       Path: /
-#       Policies:
-#       - PolicyName: ecs-service
-#         PolicyDocument:
-#           Statement:
-#           - Effect: Allow
-#             Action: ['elasticloadbalancing:DeregisterInstancesFromLoadBalancer', 'elasticloadbalancing:DeregisterTargets',
-#               'elasticloadbalancing:Describe*', 'elasticloadbalancing:RegisterInstancesWithLoadBalancer',
-#               'elasticloadbalancing:RegisterTargets', 'ec2:Describe*', 'ec2:AuthorizeSecurityGroupIngress']
-#             Resource: '*'
-#   ServiceScalingTarget:
-#     Type: AWS::ApplicationAutoScaling::ScalableTarget
-#     DependsOn: service
-#     Properties:
-#       MaxCapacity: 2
-#       MinCapacity: 1
-#       ResourceId: !Join ['', [service/, !Ref 'ECSCluster', /, !GetAtt [service, Name]]]
-#       RoleARN: !GetAtt [AutoscalingRole, Arn]
-#       ScalableDimension: ecs:service:DesiredCount
-#       ServiceNamespace: ecs
-#   ServiceScalingPolicy:
-#     Type: AWS::ApplicationAutoScaling::ScalingPolicy
-#     Properties:
-#       PolicyName: AStepPolicy
-#       PolicyType: StepScaling
-#       ScalingTargetId: !Ref 'ServiceScalingTarget'
-#       StepScalingPolicyConfiguration:
-#         AdjustmentType: PercentChangeInCapacity
-#         Cooldown: 60
-#         MetricAggregationType: Average
-#         StepAdjustments:
-#         - MetricIntervalLowerBound: 0
-#           ScalingAdjustment: 200
-#   ALB500sAlarmScaleUp:
-#     Type: AWS::CloudWatch::Alarm
-#     Properties:
-#       EvaluationPeriods: '1'
-#       Statistic: Average
-#       Threshold: '10'
-#       AlarmDescription: Alarm if our ALB generates too many HTTP 500s.
-#       Period: '60'
-#       AlarmActions: [!Ref 'ServiceScalingPolicy']
-#       Namespace: AWS/ApplicationELB
-#       Dimensions:
-#         - Name: LoadBalancer
-#           Value: !GetAtt 
-#             - ECSALB
-#             - LoadBalancerFullName
-#       ComparisonOperator: GreaterThanThreshold
-#       MetricName: HTTPCode_ELB_5XX_Count
-#   EC2Role:
-#     Type: AWS::IAM::Role
-#     Properties:
-#       AssumeRolePolicyDocument:
-#         Statement:
-#         - Effect: Allow
-#           Principal:
-#             Service: [ec2.amazonaws.com]
-#           Action: ['sts:AssumeRole']
-#       Path: /
-#       Policies:
-#       - PolicyName: ecs-service
-#         PolicyDocument:
-#           Statement:
-#           - Effect: Allow
-#             Action: ['ecs:CreateCluster', 'ecs:DeregisterContainerInstance', 'ecs:DiscoverPollEndpoint',
-#               'ecs:Poll', 'ecs:RegisterContainerInstance', 'ecs:StartTelemetrySession',
-#               'ecs:Submit*', 'logs:CreateLogStream', 'logs:PutLogEvents']
-#             Resource: '*'
-#   AutoscalingRole:
-#     Type: AWS::IAM::Role
-#     Properties:
-#       AssumeRolePolicyDocument:
-#         Statement:
-#         - Effect: Allow
-#           Principal:
-#             Service: [application-autoscaling.amazonaws.com]
-#           Action: ['sts:AssumeRole']
-#       Path: /
-#       Policies:
-#       - PolicyName: service-autoscaling
-#         PolicyDocument:
-#           Statement:
-#           - Effect: Allow
-#             Action: ['application-autoscaling:*', 'cloudwatch:DescribeAlarms', 'cloudwatch:PutMetricAlarm',
-#               'ecs:DescribeServices', 'ecs:UpdateService']
-#             Resource: '*'
-#   EC2InstanceProfile:
-#     Type: AWS::IAM::InstanceProfile
-#     Properties:
-#       Path: /
-#       Roles: [!Ref 'EC2Role']
-# Outputs:
-#   ecsservice:
-#     Value: !Ref 'service'
-#   ecscluster:
-#     Value: !Ref 'ECSCluster'
-#   ECSALB:
-#     Description: Your ALB DNS URL
-#     Value: !Join ['', [!GetAtt [ECSALB, DNSName]]]
-#   taskdef:
-#     Value: !Ref 'taskdefinition'
