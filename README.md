@@ -11,7 +11,7 @@ To simplify the demonstration I've provided a script that mimics activity from a
 ## Prerequisites
 This demo requires the following tools to be installed:
 
-- AWS CLI
+- **AWS CLI**
 
 After installing AWS CLI run ```aws configure``` to setup the CLI to use your AWS account.
 
@@ -23,21 +23,19 @@ Follow these steps to exectute the demo:
    This shell script sets the default AWS region to eu.west.1 (Ireland), zips up the Lambda function, creates an S3 bucket on AWS, uploads the zip to the bucket, deploys the CloudFormation stack and then starts the Jenkins task.
 2. ```./github_activity.sh```
 
-   This shell scripts mimics activity from GitHub by invoking the Lambda function.  It creates a file called `activity.log` in the current directory with the ID if the instance running Jenkins.  Copy this ID.  It will be referred to as <ID> below.
+   This shell scripts mimics activity from GitHub by invoking the Lambda function.  It creates a file called `activity.log` in the current directory with the ID of the instance running Jenkins.  Copy this ID.  It will be referred to as \<ID\> below.
 3. ```./get_instance_ip.sh <ID>```
 
    This shell script returns the public IP address of the running Jenkins instance. An example execution looks like `./get_instance_ip.sh i-0f1904dbb435ee275`, using the ID copied from the previous step as an input parameter. Paste the returned value into your browser to see the demo in action.  Visiting this IP after an hour should not work, since the Jenkins server should have been automatically switched off.
 
-NOTE: If you do not have permission to execute any of the shell scripts run the following command (replacing the filename if required):
-
-`chmod 700 setup.sh`
+**NOTE**: If you do not have permission to execute any of the shell scripts run the following command (replacing the filename if required): `chmod 700 setup.sh`
 
 ## Cleaning Up
 After running the demo, you should clear up the CloudFormation stack by running:
 
 * `./teardown.sh`
 
-This will delete everything but an S3 bucket containing the zip of the lambda function.  Delete this by logging in to the AWS console and performing a manual deletion.
+This will delete everything but an S3 bucket containing the zip of the lambda function.  Delete this by logging in to the AWS S3 console and performing a manual deletion.
 
 
 
