@@ -28,7 +28,7 @@ Follow these steps to exectute the demo:
 
    This shell script returns the public IP address of the running Jenkins instance. An example execution looks like `./get_instance_ip.sh i-0f1904dbb435ee275`, using the ID copied from the previous step as an input parameter. Paste the returned value into your browser to see the demo in action.  Visiting this IP after an hour should not work, since the Jenkins server should have been automatically switched off.
 
-**NOTE**: If you do not have permission to execute any of the shell scripts run the following command (replacing the filename if required): `chmod 700 setup.sh`
+**NOTE**: If you do not have permission to execute any of the shell scripts run the following command: `chmod 700 *.sh`
 
 ## Cleaning Up
 After running the demo, you should clear up the CloudFormation stack by running:
