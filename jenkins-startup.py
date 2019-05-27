@@ -15,7 +15,7 @@ def validate_request(event):
         raise Exception('Invalid signature')
 
 def create_timer():
-    stop_time = datetime.now() + timedelta(hours=2)
+    stop_time = datetime.now() + timedelta(hours=1)
     stop_expression = stop_time.strftime('cron(%M %H %d %m ? %Y)')
     client = boto3.client('events')
     client.put_rule(
